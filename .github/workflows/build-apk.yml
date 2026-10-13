@@ -11,12 +11,21 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack source
-        run: unzip -oq CoordinateMock-cloud-source.zip
+      - name: Unpack source and normalize debug permission
+        run: |
+          unzip -oq CoordinateMock-cloud-source.zip
+          python3 - <<'PY'
+          from pathlib import Path
+          main = Path('app/src/main/AndroidManifest.xml')
+          main.write_text('\n'.join(line for line in main.read_text().splitlines() if 'ACCESS_MOCK_LOCATION' not in line), encoding='utf-8')
+          debug = Path('app/src/debug/AndroidManifest.xml')
+          debug.parent.mkdir(parents=True, exist_ok=True)
+          debug.write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"><uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" tools:ignore="ProtectedPermissions,MockLocation" /></manifest>', encoding='utf-8')
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
       - name: Validate coordinates
         run: |
           mkdir -p /tmp/coordinate-check
@@ -24,10 +33,10 @@ jobs:
           java -cp /tmp/coordinate-check CoordinateCheck
       - uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "9.1.0"
+          gradle-version: '9.1.0'
           cache-disabled: true
       - name: Compile and check
         run: gradle --no-daemon :app:assembleDebug :app:lintDebug
