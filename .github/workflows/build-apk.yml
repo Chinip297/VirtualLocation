@@ -1,0 +1,53 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack source
+        run: unzip -oq CoordinateMock-cloud-source.zip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Validate coordinates
+        run: |
+          mkdir -p /tmp/coordinate-check
+          javac -d /tmp/coordinate-check app/src/main/java/local/coordinatemock/Coordinates.java checks/CoordinateCheck.java
+          java -cp /tmp/coordinate-check CoordinateCheck
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.1.0"
+          cache-disabled: true
+      - name: Compile and check
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Package APK
+        run: |
+          mkdir -p deliverables
+          cp app/build/outputs/apk/debug/app-debug.apk deliverables/CoordinateMock-1.0.apk
+          cd deliverables
+          sha256sum CoordinateMock-1.0.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CoordinateMock-APK
+          path: deliverables/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-lint-reports
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+          retention-days: 7
